@@ -14,8 +14,28 @@ def rowToPoints(row, dimension):
             a[i,j] = row[i+j]
     return a
 
-class MultiCell:
+def getPointOnLine(lineBegin, lineEnd, axis, axisValue, targetPoint):
+    """
+    Get point on line by one given coordinate
+    :param lineBegin: first fixed point on line
+    :param lineEnd: second fixed point
+    :param axis: known coordinate axis index
+    :param axisValue: known coordinate
+    :param targetPoint: function output
+    :return:
+    """
+    dim = lineBegin.shape[0]
+    targetPoint[axis] = axisValue
+    progress = (axisValue - lineBegin[axis]) / (lineEnd[axis] - lineBegin[axis])
+    for i in range(0, dim):
+        if i == axis:
+            continue
+        targetPoint[i] = (1-progress) * lineBegin[i] + progress * lineEnd[i]
 
+class MultiCell:
+    """
+        Rectangular cell in multi-dimensional space
+    """
     def __init__(self, dim, p1=None, p2=None):
         self.userFlag = False
         self.__dim = 1
@@ -96,10 +116,8 @@ class MultiGrid:
             pass #todo implement from here when this class is needed
 
 
-class BlocksCounter:
-    """
-        This class calculates count of blocks that concrete dataset included to
-    """
+class BlocksCounter(object):
+    """This class calculates count of blocks that concrete dataset included to."""
 
     def __markVisited(self, indices):
         index = 0
@@ -110,13 +128,41 @@ class BlocksCounter:
     def __getPointIndexes(self, point, indices):
         for i in range(0, self.__globalCell.dim()):
             tmp = (point[i] - self.__globalCell.getMin()[i]) / (self.__globalCell.getMax()[i] - self.__globalCell.getMin()[i])
-            indices[i] = round(tmp * self.__cellsPerAxis)
+            index = int(tmp * (self.__cellsPerAxis))
+            # For right boundary values than formally does not imcluded to system
+            # because cells are alike [0, 1), [1, 2), ... , [9, 10) <-- this border
+            # should not be open
+            if index == self.__cellsPerAxis:
+                index = self.__cellsPerAxis-1
 
-    def __init__(self, globalCell=None, cellsPerAxis=1):
+            indices[i] = index
+
+    def __indexToLowerBoundaryCoordinate(self, axis, index):
+        return self.__globalCell.getMin()[axis] + \
+               (self.__globalCell.getMax()[axis] - self.__globalCell.getMin()[axis]) * \
+               (index / self.__cellsPerAxis)
+
+    def __getCellSize(self, axis):
+        return (self.__globalCell.getMax()[axis] - self.__globalCell.getMin()[axis]) / self.__cellsPerAxis
+
+    def __init__(self, globalCell=None, cellsPerAxis=1, mode="points"):
+        """
+        Constructor that configure BlocksCounter
+        :param globalCell: MultiCell object describes area of blocks counting
+        :param cellsPerAxis: Axis division method
+        :param mode: "points" means than only points inclusions will be accounted,
+                     "lines" means than lines connecting points will be accounted too. NOT IMPLEMENTED
+        :return: constructed object
+        """
+        if mode != "points" and mode != "lines":
+            raise Exception("Invalid mode for BlocksCounter")
+
         self.__globalCell = None
         self.__offsets = []
         self.__cellsPerAxis = 0
         self.__cellHasPoint = None
+        self.__mode = mode
+        self.__dim = 0
 
         if globalCell is not None:
             self.setSize(globalCell)
@@ -124,6 +170,7 @@ class BlocksCounter:
 
     def setSize(self, cell):
         self.__globalCell = cell
+        self.__dim = cell.dim()
 
     def setCellsPerAxis(self, cellsPerAxis):
         self.__cellsPerAxis = cellsPerAxis
@@ -135,6 +182,56 @@ class BlocksCounter:
         self.__cellHasPoint[:] = 0
 
     def calculate(self, points):
+        if self.__mode == "points":
+            return self.__calculatePoints(points)
+        else:
+            return self.__calculateLines(points)
+
+    def __calculateLines(self, points):
+        self.__cellHasPoint[:] = 0
+        if points.shape[0] == 1:
+            return 1
+
+        beginIndexes = np.ndarray(self.__globalCell.dim(), dtype=int)
+        endIndexes = np.ndarray(self.__globalCell.dim(), dtype=int)
+        indexes = np.ndarray(self.__globalCell.dim(), dtype=int)
+
+        middlePoint = np.ndarray(self.__globalCell.dim())
+
+        self.__getPointIndexes(points[0, :], beginIndexes)
+        for pointIndex in range(1, points.shape[0]):
+            self.__getPointIndexes(points[pointIndex, :], endIndexes)
+            self.__markVisited(endIndexes)
+            self.__markVisited(beginIndexes)
+            # Iterating by all dimensions to find all crossings of line with grid
+            for d in range(0, self.__dim):
+                # Now iterating by cells crossing along this dimension
+                begin = min(beginIndexes[d], endIndexes[d]) + 1
+                end = max(beginIndexes[d], endIndexes[d])
+
+                for i in range(begin, end+1):
+                    # We have crossing with i's cell lowest border on axis d
+                    getPointOnLine(lineBegin=points[pointIndex-1, :],
+                                   lineEnd=points[pointIndex, :],
+                                   axis=d,
+                                   axisValue=self.__indexToLowerBoundaryCoordinate(axis=d, index=i),
+                                   targetPoint=middlePoint)
+                    # a little move of border point inside cell
+                    middlePoint[d] -= self.__getCellSize(d) * 0.1;
+                    self.__getPointIndexes(middlePoint, indexes)
+                    self.__markVisited(indexes)
+
+            beginIndexes = endIndexes.copy()
+
+        result = 0
+        for m in self.__cellHasPoint:
+            if m != 0:
+                result += 1
+
+        return result
+
+
+    def __calculatePoints(self, points):
         self.__cellHasPoint[:] = 0
 
         indexes = np.ndarray(self.__globalCell.dim(), dtype=int)

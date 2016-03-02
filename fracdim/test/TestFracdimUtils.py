@@ -26,6 +26,41 @@ class Test_rowToPoints(unittest.TestCase):
         self.assertEqual(  a[0,1], testRow[1])
         self.assertEqual(a[-1,-1], testRow[-1])
 
+class Test_getPointOnLine(unittest.TestCase):
+    def test_1d_trivial(self):
+        p1 = np.asarray([0])
+        p2 = np.asarray([1])
+
+        result = np.ndarray(shape=[1])
+        value = 0.25
+        fu.getPointOnLine(p1, p2, 0, value, result)
+        self.assertEqual(result[0], value)
+
+    def test_2d_target_between_points(self):
+        p1 = np.asarray([1, 1])
+        p2 = np.asarray([3, 2])
+        result = np.ndarray(shape=[2])
+        value = 2
+        expectedResult = 1.5
+        fu.getPointOnLine(p1, p2, 0, value, result)
+        self.assertEqual(result[0], value)
+        self.assertEqual(result[1], expectedResult)
+
+    def test_2d_target_out_of_line(self):
+        p1 = np.asarray([1, 1])
+        p2 = np.asarray([3, 2])
+        result = np.ndarray(shape=[2])
+        value = 4
+        expectedResult = 2.5
+        fu.getPointOnLine(p1, p2, 0, value, result)
+        self.assertEqual(result[0], value)
+        self.assertEqual(result[1], expectedResult)
+
+        value = 0
+        expectedResult = 0.5
+        fu.getPointOnLine(p1, p2, 0, value, result)
+        self.assertEqual(result[0], value)
+        self.assertEqual(result[1], expectedResult)
 
 class Test_MultiCell(unittest.TestCase):
     def test_creation(self):
@@ -33,8 +68,8 @@ class Test_MultiCell(unittest.TestCase):
         p2 = np.asarray([3, 3])
         a = fu.MultiCell(2, p1, p2)
 
-        p1 = np.ndarray(shape=(2))
-        p2 = np.ndarray(shape=(3))
+        p1 = np.ndarray(shape=[2])
+        p2 = np.ndarray(shape=[3])
         self.assertRaises(Exception, fu.MultiCell, 3, p1, p2)
 
     def test_point_checking(self):
@@ -76,19 +111,19 @@ class Test_BlocksCounter(unittest.TestCase):
     p2 = np.asarray([1, 1, 1])
     globalCell = fu.MultiCell(3, p1, p2)
 
-    def test_creation(self):
+    def test_creation_mode_is_point(self):
         a = fu.BlocksCounter()
         a.setSize(self.globalCell)
         a.setCellsPerAxis(10)
 
-    def test_counter_one_point(self):
+    def test_counter_one_point_mode_is_point(self):
         a = fu.BlocksCounter(cellsPerAxis=10, globalCell=self.globalCell)
         points = np.ndarray(3).reshape((1, 3))
         points[0, :] = [0.5, 0.5, 0.5]
         res = a.calculate(points)
         self.assertEqual(res, 1)
 
-    def test_counter_two_points_in_one_cell(self):
+    def test_counter_two_points_in_one_cell_mode_is_point(self):
         a = fu.BlocksCounter(cellsPerAxis=10, globalCell=self.globalCell)
         points = np.ndarray(6).reshape((2, 3))
         points[0, :] = [0.5, 0.5, 0.5]
@@ -96,7 +131,7 @@ class Test_BlocksCounter(unittest.TestCase):
         res = a.calculate(points)
         self.assertEqual(res, 1)
 
-    def test_counter_two_points_in_different_cells(self):
+    def test_counter_two_points_in_different_cells_mode_is_point(self):
         a = fu.BlocksCounter(cellsPerAxis=10, globalCell=self.globalCell)
         points = np.ndarray(6).reshape((2, 3))
         points[0, :] = [0.5, 0.5, 0.5]
@@ -104,7 +139,7 @@ class Test_BlocksCounter(unittest.TestCase):
         res = a.calculate(points)
         self.assertEqual(res, 2)
 
-    def test_previous_counting_artifacts(self):
+    def test_previous_counting_artifacts_mode_is_point(self):
         a = fu.BlocksCounter(cellsPerAxis=10, globalCell=self.globalCell)
         points = np.ndarray(6).reshape((2, 3))
         points[0, :] = [0.5, 0.5, 0.5]
@@ -117,7 +152,7 @@ class Test_BlocksCounter(unittest.TestCase):
         res = a.calculate(points)
         self.assertEqual(res, 1)
 
-    def test_1d(self):
+    def test_1d_mode_is_point(self):
         p1 = np.asarray([0])
         p2 = np.asarray([1])
         globalCell = fu.MultiCell(1, p1, p2)
@@ -129,6 +164,93 @@ class Test_BlocksCounter(unittest.TestCase):
         points[2, :] = [0.62111]
         points[3, :] = [0.62112]
         self.assertEqual(a.calculate(points), 3)
+
+
+    def test_1d_test_boundaries_mode_is_point(self):
+        p1 = np.asarray([0])
+        p2 = np.asarray([1])
+        globalCell = fu.MultiCell(1, p1, p2)
+        count = 10
+        a = fu.BlocksCounter(cellsPerAxis=count, globalCell=globalCell)
+
+        points = np.ndarray(2).reshape((2, 1))
+        points[0, :] = [0.0]
+        points[1, :] = [1.0]
+        self.assertEqual(a.calculate(points), 2)
+
+    def test_1d_all_cells_with_points_mode_is_point(self):
+        p1 = np.asarray([0])
+        p2 = np.asarray([1])
+        globalCell = fu.MultiCell(1, p1, p2)
+        count = 10
+        a = fu.BlocksCounter(cellsPerAxis=count, globalCell=globalCell)
+
+        points = np.ndarray(count*2).reshape((count*2, 1))
+        for i in range(0, count*2):
+            points[i, :] = [i/(count*2)]
+
+        self.assertEqual(a.calculate(points), count)
+
+    # Now lets test mode="lines"
+
+    def test_1d_test_boundaries_mode_is_lines(self):
+        p1 = np.asarray([0])
+        p2 = np.asarray([1])
+        globalCell = fu.MultiCell(1, p1, p2)
+        count = 10
+        a = fu.BlocksCounter(cellsPerAxis=count, globalCell=globalCell, mode="lines")
+
+        points = np.ndarray(2).reshape((2, 1))
+        points[0, :] = [0.0]
+        points[1, :] = [1.0]
+        self.assertEqual(a.calculate(points), count)
+
+    def test_2d_simple_line_mode_line(self):
+        p1 = np.asarray([0, 0])
+        p2 = np.asarray([10, 10])
+        globalCell = fu.MultiCell(2, p1, p2)
+        count = 10
+        a = fu.BlocksCounter(cellsPerAxis=count, globalCell=globalCell, mode="lines")
+
+        points = np.ndarray(4).reshape((2, 2))
+        points[0, :] = [0.1, 0.1]
+        points[1, :] = [9.9, 1.9]
+        self.assertEqual(a.calculate(points), count+1)
+
+        points[0, :] = [0.1, 0.1]
+        points[1, :] = [9.9, 1.0] # Test for [1, 2) cell format
+        self.assertEqual(a.calculate(points), count+1)
+
+        points[0, :] = [0.1, 0.1]
+        points[1, :] = [9.9, 0.9]
+        self.assertEqual(a.calculate(points), count)
+
+    def test_2d_poly_line_mode_line(self):
+        p1 = np.asarray([0, 0])
+        p2 = np.asarray([10, 10])
+        globalCell = fu.MultiCell(2, p1, p2)
+        count = 10
+        a = fu.BlocksCounter(cellsPerAxis=count, globalCell=globalCell, mode="lines")
+
+        points = np.ndarray(8).reshape((4, 2))
+        # Trivial case
+        points[0, :] = [0.5, 0.5]
+        points[1, :] = [0.5, 0.5]
+        points[2, :] = [0.5, 0.5]
+        points[3, :] = [0.5, 0.5]
+        self.assertEqual(a.calculate(points), 1)
+
+        points[0, :] = [0.5, 0.5]
+        points[1, :] = [9.5, 0.5]
+        points[2, :] = [9.5, 1.5]
+        points[3, :] = [0.5, 1.5]
+        self.assertEqual(a.calculate(points), 2*count)
+
+        points[0, :] = [0.5, 0.5]
+        points[1, :] = [9.5, 1.5]
+        points[2, :] = [0.5, 1.5]
+        points[3, :] = [9.5, 2.5]
+        self.assertEqual(a.calculate(points), 2*count+1)
 
 
 if __name__ == "__main__":
