@@ -1,7 +1,10 @@
+#!/usr/bin/env python3
+
 import unittest
 import numpy as np
 
 from fracdim import FractalGenerator as fg
+
 
 class Test_KochSnowflake(unittest.TestCase):
     def test_creation(self):

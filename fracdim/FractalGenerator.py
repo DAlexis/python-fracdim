@@ -1,6 +1,7 @@
 import numpy as np
 import math
 
+
 class KochSnowflake:
     def __init__(self):
         self.__points = None
